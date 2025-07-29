@@ -1,0 +1,43 @@
+name: Build and Deploy to ECS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build, Tag, and Push Image
+      env:
+        ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+        ECR_REPO_NAME: ${{ secrets.ECR_REPO_NAME }}
+      run: |
+        docker build -t $ECR_REPO_NAME .
+        docker tag $ECR_REPO_NAME:latest $ECR_REGISTRY/$ECR_REPO_NAME:latest
+        docker push $ECR_REGISTRY/$ECR_REPO_NAME:latest
+
+    - name: Deploy New Task Definition to ECS
+      env:
+        CLUSTER_NAME: ${{ secrets.ECS_CLUSTER_NAME }}
+        SERVICE_NAME: ${{ secrets.ECS_SERVICE_NAME }}
+      run: |
+        aws ecs update-service \
+          --cluster $CLUSTER_NAME \
+          --service $SERVICE_NAME \
+          --force-new-deployment
+
